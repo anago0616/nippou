@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大工園日報 を追加</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2e7d32">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="大工園日報">
+<script src="config.js"></script>
+<style>
+  :root { --blue: #2e7d32; --bg: #f2f4f7; --line: #d0d5dd; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+         background: var(--bg); color: #1a1a1a; font-size: 16px; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 28px 16px 40px; }
+  .hero { text-align: center; }
+  .hero img { width: 104px; height: 104px; border-radius: 22px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+  .hero h1 { font-size: 24px; margin: 16px 0 4px; }
+  .hero p { color: #666; font-size: 14px; margin: 0; }
+
+  .card { background: #fff; border-radius: 12px; padding: 20px; margin-top: 22px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 17px; margin: 0 0 12px; color: var(--blue); }
+  .btn { display: block; width: 100%; padding: 16px; border: none; border-radius: 10px;
+         font-size: 17px; font-family: inherit; cursor: pointer; text-align: center;
+         text-decoration: none; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-outline { background: #fff; color: var(--blue); border: 1px solid var(--blue); }
+  ol { margin: 0; padding-left: 22px; }
+  ol li { font-size: 15px; line-height: 2.1; }
+  .key { display: inline-block; background: #eef2f7; border: 1px solid var(--line);
+         border-radius: 6px; padding: 1px 8px; font-weight: bold; }
+  .note { color: #777; font-size: 13px; margin-top: 14px; line-height: 1.7; }
+  .skip { display: block; text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+  .hidden { display: none !important; }
+  .done { background: #e8f5e9; color: #2e7d32; border-radius: 10px; padding: 14px;
+          text-align: center; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <img src="icons/icon-192.png" alt="">
+    <h1 id="appName">大工園日報</h1>
+    <p>工事日報をスマホから提出できます</p>
+  </div>
+
+  <!-- Android：その場でインストールできる -->
+  <div class="card hidden" id="cardAuto">
+    <h2>ホーム画面に追加する</h2>
+    <button class="btn btn-primary" id="btnInstall">アプリを追加</button>
+    <p class="note">追加すると、次からはホーム画面のアイコンを押すだけで開けます。</p>
+  </div>
+
+  <!-- iPhone：手順を案内 -->
+  <div class="card hidden" id="cardIos">
+    <h2>ホーム画面に追加する（iPhone）</h2>
+    <ol>
+      <li>画面の下にある <span class="key">共有ボタン</span>（□に↑）を押す</li>
+      <li>下にスクロールして <span class="key">ホーム画面に追加</span> を押す</li>
+      <li>右上の <span class="key">追加</span> を押す</li>
+    </ol>
+    <p class="note">※ この画面が Safari で開いていないと追加できません。<br>
+      別のアプリで開いている場合は、Safari で開き直してください。</p>
+  </div>
+
+  <!-- Android だが自動追加が使えないとき -->
+  <div class="card hidden" id="cardManual">
+    <h2>ホーム画面に追加する（Android）</h2>
+    <ol>
+      <li>画面右上の <span class="key">⋮</span>（縦の三点）を押す</li>
+      <li><span class="key">アプリをインストール</span> または
+          <span class="key">ホーム画面に追加</span> を押す</li>
+      <li><span class="key">インストール</span> を押す</li>
+    </ol>
+  </div>
+
+  <div class="card hidden" id="cardDone">
+    <div class="done">追加しました。ホーム画面のアイコンから開いてください。</div>
+  </div>
+
+  <a class="btn btn-outline" href="./" style="margin-top:16px;">追加せずにこのまま使う</a>
+  <a class="skip" href="./">※ あとから追加することもできます</a>
+</div>
+
+<script>
+document.getElementById("appName").textContent =
+  (window.NIPPOU && window.NIPPOU.co === "daikuen") ? "大工園日報" : "増田日報";
+document.title = document.getElementById("appName").textContent + " を追加";
+
+const ua = navigator.userAgent;
+const isIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && "ontouchend" in document);
+let deferred = null;
+
+// Android Chrome はここで「追加できるよ」と教えてくれる
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferred = e;
+  show("cardAuto");
+});
+
+window.addEventListener("appinstalled", () => show("cardDone"));
+
+function show(id) {
+  ["cardAuto", "cardIos", "cardManual", "cardDone"].forEach(x => {
+    document.getElementById(x).classList.toggle("hidden", x !== id);
+  });
+}
+
+document.getElementById("btnInstall").onclick = async () => {
+  if (!deferred) { show("cardManual"); return; }
+  deferred.prompt();
+  const r = await deferred.userChoice;
+  deferred = null;
+  if (r && r.outcome === "accepted") show("cardDone");
+};
+
+// 既にホーム画面から開いている場合
+if (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone) {
+  show("cardDone");
+} else if (isIos) {
+  show("cardIos");
+} else {
+  // Android で beforeinstallprompt が来なければ手動案内に切り替える
+  setTimeout(() => {
+    if (!deferred && document.getElementById("cardAuto").classList.contains("hidden")
+        && document.getElementById("cardDone").classList.contains("hidden")) {
+      show("cardManual");
+    }
+  }, 1800);
+}
+
+// インストールできる状態にするため、サービスワーカーを登録しておく
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=2").catch(() => {}));
+}
+</script>
+</body>
+</html>
