@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工事日報</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1565c0">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="増田日報">
+<script src="config.js"></script>
+<style>
+  :root { --blue: #1565c0; --bg: #f2f4f7; --line: #d0d5dd; --danger: #c62828; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; background: var(--bg); color: #1a1a1a; font-size: 16px; -webkit-text-size-adjust: 100%; }
+  header { background: var(--blue); color: #fff; padding: 12px 16px; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  header a { color: #fff; font-size: 13px; text-decoration: none; border: 1px solid rgba(255,255,255,.6); padding: 4px 10px; border-radius: 6px; }
+  main { padding: 12px; max-width: 640px; margin: 0 auto; padding-bottom: 96px; }
+  .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 15px; margin: 0 0 12px; color: var(--blue); border-left: 4px solid var(--blue); padding-left: 8px; }
+
+  /* 入力欄の高さを統一し、端末差で重ならないようにする */
+  label { display: block; font-size: 13px; color: #555; margin: 0 0 5px; line-height: 1.3; }
+  /* 行の間隔は .row / .field が必ず自分で持つ。
+     横並びの右側だけ余白が消えると、端末差で下の行と重なるため :last-child では消さない */
+  .field { margin-bottom: 14px; }
+  .card > .field:last-child, .card > .row:last-child,
+  .subgroup > .field:last-child, .subgroup > .row:last-child { margin-bottom: 0; }
+  /* プルダウン(select)は端末によって高さが崩れて隣の欄と重なるため、この画面では使わない */
+  input[type=text], input[type=number], input[type=date], input[type=time], textarea {
+    display: block; width: 100%; min-height: 46px; padding: 11px 10px; font-size: 16px; line-height: 1.3;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff; color: #1a1a1a; font-family: inherit;
+  }
+  textarea { min-height: 76px; resize: vertical; }
+  .row { display: flex; gap: 8px; align-items: start; margin-bottom: 14px; }
+  .row > .field { flex: 1; min-width: 0; margin-bottom: 0; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { padding: 10px 16px; border: 1px solid var(--line); border-radius: 22px; background: #fff; font-size: 15px; cursor: pointer; user-select: none; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+  .chip.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .grouplabel { font-size: 13px; color: #555; margin: 0 0 6px; }
+  .subgroup { margin-bottom: 16px; }
+  .subgroup:last-child { margin-bottom: 0; }
+  .count { font-size: 12px; color: var(--blue); margin-left: 6px; }
+
+  .btn { display: inline-block; padding: 12px 18px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-family: inherit; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-outline { background: #fff; color: var(--blue); border: 1px solid var(--blue); }
+  .btn-danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-small { padding: 6px 12px; font-size: 14px; border-radius: 6px; }
+  .footerbar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line); padding: 10px 12px; display: flex; gap: 8px; justify-content: center; z-index: 10; }
+  /* 狭い画面で「下書き保存」が2行に折れないよう、余白と文字を詰める */
+  .footerbar .btn { flex: 1; max-width: 220px; padding: 13px 6px; font-size: 15px; white-space: nowrap; }
+  .listActions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .listActions .btn { width: 100%; white-space: nowrap; }
+
+  .report-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+  .report-item:last-child { border-bottom: none; }
+  .report-item .title { font-size: 15px; }
+  .report-item .sub { font-size: 12px; color: #777; margin-top: 2px; }
+  .badge { font-size: 12px; padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
+  .badge.draft { background: #fff3e0; color: #e65100; }
+  .badge.submitted { background: #e8f5e9; color: #2e7d32; }
+
+  .sekou-row { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 10px; position: relative; }
+  .sekou-row .del { position: absolute; top: 8px; right: 8px; }
+  .hidden { display: none !important; }
+  .toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 14px; z-index: 100; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .center { text-align: center; }
+  .muted { color: #888; font-size: 13px; }
+  #syncBadge { font-size: 12px; background: #fff3e0; color: #e65100; padding: 4px 10px; border-radius: 12px; cursor: pointer; white-space: nowrap; }
+  #syncBadge.ok { background: rgba(255,255,255,.2); color: #fff; }
+  .badge.pending { background: #fff3e0; color: #e65100; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="headerTitle">工事日報</h1>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
+    <span style="font-size:11px; opacity:.8;">v14</span>
+    <a href="admin.html">管理画面</a>
+  </div>
+</header>
+
+<main>
+  <!-- ======== 一覧画面 ======== -->
+  <div id="listView">
+    <div class="card">
+      <div class="field">
+        <label>報告者（自分の名前）</label>
+        <div class="chips" id="chipsReporter"></div>
+        <input type="hidden" id="myName">
+      </div>
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="listDate">
+      </div>
+    </div>
+    <div class="card">
+      <h2>この日の日報</h2>
+      <div id="reportList"><p class="muted center">読み込み中...</p></div>
+    </div>
+    <div class="listActions">
+      <button class="btn btn-primary" onclick="newReport()">＋ 新しい日報を書く</button>
+      <button class="btn btn-outline" onclick="copyLast()">前回をコピー</button>
+    </div>
+    <p class="muted center" id="offlineState" style="margin-top:14px;">オフライン対応：確認中…</p>
+  </div>
+
+  <!-- ======== 入力画面 ======== -->
+  <div id="editView" class="hidden">
+    <div class="card">
+      <h2>基本情報</h2>
+      <div class="field hidden" id="reporterField">
+        <label>報告者</label>
+        <div class="chips" id="chipsEditReporter"></div>
+        <input type="hidden" id="f_reporter">
+      </div>
+      <div class="field"><label>日付</label><input type="date" id="f_date"></div>
+      <div class="field">
+        <label>天気</label>
+        <div class="chips" id="chipsWeather"></div>
+        <input type="hidden" id="f_weather">
+      </div>
+      <div class="row">
+        <div class="field"><label>出社</label><input type="time" id="f_shussha"></div>
+        <div class="field"><label>帰社</label><input type="time" id="f_kisha"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>工事情報</h2>
+      <div class="field"><label>工事名</label><textarea id="f_kouji_mei" rows="2"></textarea></div>
+      <div class="field"><label>発注者</label><input type="text" id="f_hacchusha"></div>
+      <div class="field"><label>工事場所</label><input type="text" id="f_kouji_basho"></div>
+      <div class="field"><label>工種</label><input type="text" id="f_koushu"></div>
+      <div class="row">
+        <div class="field"><label>作業時間（から）</label><input type="time" id="f_jikan_from"></div>
+        <div class="field"><label>作業時間（まで）</label><input type="time" id="f_jikan_to"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>人員</h2>
+      <div class="subgroup">
+        <p class="grouplabel">自社<span class="count" id="cntJisha"></span></p>
+        <div class="chips" id="chipsJisha"></div>
+      </div>
+      <div class="subgroup">
+        <p class="grouplabel"><span class="partnerName">大工園</span><span class="count" id="cntDaikuen"></span></p>
+        <div class="chips" id="chipsDaikuen"></div>
+      </div>
+      <div class="subgroup">
+        <div class="row">
+          <div class="field"><label>その他 会社名</label><input type="text" id="f_sonota_kaisha"></div>
+          <div class="field"><label>その他 人数</label><input type="number" id="f_sonota_num" min="0" inputmode="numeric"></div>
+        </div>
+        <div class="field"><label>その他 作業員名</label><input type="text" id="f_sagyouin_gaichu" placeholder="任意"></div>
+      </div>
+      <div class="subgroup">
+        <div class="field"><label>交通誘導員 会社名</label><input type="text" id="f_yudo_kaisha"></div>
+        <div class="row">
+          <div class="field"><label>誘導員 A（人数）</label><input type="number" id="f_yudo_a" min="0" inputmode="numeric"></div>
+          <div class="field"><label>誘導員 B（人数）</label><input type="number" id="f_yudo_b" min="0" inputmode="numeric"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>車両</h2>
+      <div class="subgroup">
+        <p class="grouplabel">自社<span class="count" id="cntVehJisha"></span></p>
+        <div class="chips" id="chipsVehJisha"></div>
+      </div>
+      <div class="subgroup">
+        <p class="grouplabel"><span class="partnerName">大工園</span><span class="count" id="cntVehDaikuen"></span></p>
+        <div class="chips" id="chipsVehDaikuen"></div>
+      </div>
+      <div class="subgroup">
+        <div class="row">
+          <div class="field"><label>リース 貸出元</label><input type="text" id="f_lease_moto"></div>
+          <div class="field"><label>リース 車両名</label><input type="text" id="f_lease_name"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>クレーム状況</h2>
+      <div class="field"><label>状況</label><textarea id="f_claim_joukyou"></textarea></div>
+      <div class="field"><label>対応</label><textarea id="f_claim_taiou"></textarea></div>
+    </div>
+
+    <div class="card">
+      <h2>使用機械の異常</h2>
+      <div class="field"><label>①</label><input type="text" id="f_kikai1"></div>
+      <div class="field"><label>②</label><input type="text" id="f_kikai2"></div>
+      <div class="field"><label>状況</label><textarea id="f_kikai_joukyou"></textarea></div>
+      <div class="field"><label>対応</label><textarea id="f_kikai_taiou"></textarea></div>
+    </div>
+
+    <div class="card">
+      <h2>工事施工数量</h2>
+      <p class="muted" style="margin:-4px 0 10px;">空欄のまま印刷して、手書きで書き込んでもOKです。</p>
+      <div id="sekouRows"></div>
+      <button class="btn btn-outline btn-small" onclick="addSekouRow()">＋ 行を追加</button>
+    </div>
+
+    <div class="card">
+      <h2>備考</h2>
+      <div class="field"><textarea id="f_bikou" rows="3"></textarea></div>
+    </div>
+
+    <div class="card" id="deleteCard" style="text-align:center;">
+      <button class="btn btn-danger btn-small" onclick="deleteReport()">この日報を削除</button>
+    </div>
+  </div>
+</main>
+
+
+<div class="footerbar hidden" id="editFooter">
+  <button class="btn btn-outline" onclick="saveReport('draft')">下書き保存</button>
+  <button class="btn btn-primary" onclick="saveReport('submitted')">提出する</button>
+  <button class="btn" style="background:#eee;" onclick="backToList()">戻る</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let masters = null;
+let editingId = null;
+let adminMode = false;   // 管理画面から「編集」で開いたとき true
+let APP_TITLE = "工事日報";
+const picked = { wJisha: [], wDaikuen: [], vJisha: [], vDaikuen: [] };
+const GROUPS = {
+  wJisha:   { box: "chipsJisha",      count: "cntJisha",      unit: "人" },
+  wDaikuen: { box: "chipsDaikuen",    count: "cntDaikuen",    unit: "人" },
+  vJisha:   { box: "chipsVehJisha",   count: "cntVehJisha",   unit: "台" },
+  vDaikuen: { box: "chipsVehDaikuen", count: "cntVehDaikuen", unit: "台" },
+};
+
+const $ = id => document.getElementById(id);
+const todayStr = () => new Date().toLocaleDateString("sv-SE");
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+// ===== Googleスプレッドシート(GAS)との通信 =====
+const API = window.NIPPOU.api;      // config.js で指定
+const CO  = window.NIPPOU.co;       // "masuda" / "daikuen"
+
+async function apiGet(params) {
+  const q = new URLSearchParams(Object.assign({ co: CO }, params));
+  const res = await fetch(API + "?" + q.toString());
+  if (!res.ok) throw new Error("通信エラー");
+  const d = await res.json();
+  if (d && d.error) throw new Error(d.error);
+  return d;
+}
+
+// POSTは text/plain で送る（事前確認の通信が発生せず、GASがそのまま受け取れる）
+async function apiPost(body) {
+  const res = await fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(Object.assign({ co: CO }, body))
+  });
+  if (!res.ok) throw new Error("通信エラー");
+  const d = await res.json();
+  if (d && d.error) throw new Error(d.error);
+  return d;
+}
+
+// ==================================================================
+// 端末内の保存庫（IndexedDB）
+// 日報はまず端末に保存し、つながった時にサーバーへ送る。
+// これで電波が無くても、会社のPCが消えていても日報が書ける。
+// ==================================================================
+const DB_NAME = "nippou-local-" + window.NIPPOU.co, STORE = "reports";
+let dbPromise = null;
+
+function db() {
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, { keyPath: "localId" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return dbPromise;
+}
+
+function tx(mode, fn) {
+  return db().then(d => new Promise((resolve, reject) => {
+    const t = d.transaction(STORE, mode);
+    const req = fn(t.objectStore(STORE));
+    t.onerror = () => reject(t.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+const localAll = () => tx("readonly", s => s.getAll());
+const localGet = id => tx("readonly", s => s.get(id));
+const localPut = rec => tx("readwrite", s => s.put(rec));
+const localDel = id => tx("readwrite", s => s.delete(id));
+const newLocalId = () =>
+  "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// ---------- サーバーへの送信（たまっている分をまとめて） ----------
+let syncing = false;
+
+async function trySync(manual) {
+  if (syncing) return;
+  syncing = true;
+  let sent = 0, failed = 0;
+  try {
+    const all = await localAll();
+    for (const rec of all.filter(r => r.pending)) {
+      try {
+        if (rec.deleted) {
+          if (rec.serverId) await apiPost({ action: "delete", id: rec.serverId });
+          await localDel(rec.localId);
+        } else if (rec.serverId) {
+          await apiPost({ action: "save", id: rec.serverId, report: rec.report });
+          rec.pending = false;
+          await localPut(rec);
+        } else {
+          const res = await apiPost({ action: "save", report: rec.report });
+          rec.serverId = res.id;
+          rec.pending = false;
+          await localPut(rec);
+        }
+        sent++;
+      } catch (e) {
+        failed++;                       // つながらないだけ。次の機会に送る
+      }
+    }
+  } finally {
+    syncing = false;
+  }
+  await refreshSyncBadge();
+  if (manual) toast(failed ? "まだ送れません（電波・サーバーを確認）" : (sent ? `${sent}件を送信しました` : "送信待ちはありません"));
+  if (sent) loadList();
+  return { sent, failed };
+}
+
+async function refreshSyncBadge() {
+  const all = await localAll();
+  const n = all.filter(r => r.pending).length;
+  const el = $("syncBadge");
+  el.classList.toggle("hidden", n === 0);
+  el.classList.toggle("ok", false);
+  if (n) el.textContent = `未送信 ${n}件 ▲`;
+}
+
+// サーバーの日報を端末側に取り込む（送信待ちのものは上書きしない）
+async function pullFromServer(reporter, date) {
+  const list = await apiGet({ action: "list", full: "1", date: date, reporter: reporter });
+  const all = await localAll();
+  for (const r of list) {
+    const mine = all.find(x => x.serverId === r.id);
+    if (mine && mine.pending) continue;            // 端末の変更を優先
+    const localId = mine ? mine.localId : newLocalId();
+    const report = Object.assign({}, r);
+    delete report.id; delete report.updated_at;
+    await localPut({ localId, serverId: r.id, pending: false, deleted: false, report });
+  }
+}
+
+// ---------- 選択ボタン ----------
+function buildChips(key, values) {
+  $(GROUPS[key].box).innerHTML = (values || []).map(v =>
+    `<span class="chip" data-v="${esc(v)}" onclick="toggleChip(this,&quot;${key}&quot;)">${esc(v)}</span>`
+  ).join("");
+}
+
+function toggleChip(el, key) {
+  el.classList.toggle("on");
+  const arr = picked[key];
+  const i = arr.indexOf(el.dataset.v);
+  if (i >= 0) arr.splice(i, 1); else arr.push(el.dataset.v);
+  refreshCount(key);
+}
+
+function refreshCount(key) {
+  const n = picked[key].length;
+  $(GROUPS[key].count).textContent = n ? n + GROUPS[key].unit : "";
+}
+
+// ---------- 1つだけ選ぶボタン（報告者・天気） ----------
+// プルダウンは端末によって表示が崩れるため使わない
+function buildSingleChips(boxId, values, hiddenId, onPick) {
+  const box = $(boxId);
+  box.innerHTML = (values || []).map(v =>
+    `<span class="chip" data-v="${esc(v)}">${esc(v)}</span>`).join("");
+  for (const el of box.children) {
+    el.onclick = () => {
+      $(hiddenId).value = el.dataset.v;
+      syncSingle(boxId, hiddenId);
+      if (onPick) onPick(el.dataset.v);
+    };
+  }
+}
+
+function syncSingle(boxId, hiddenId) {
+  const v = $(hiddenId).value;
+  for (const el of $(boxId).children) el.classList.toggle("on", el.dataset.v === v);
+}
+
+function setChips(key, values) {
+  values = Array.isArray(values) ? values.slice() : (values ? [values] : []);
+  picked[key] = values;
+  const box = $(GROUPS[key].box);
+  const known = [];
+  for (const el of box.children) {
+    el.classList.toggle("on", values.includes(el.dataset.v));
+    known.push(el.dataset.v);
+  }
+  // 一覧にない名前（過去の手入力など）は消えないようボタンを足す
+  values.filter(v => !known.includes(v)).forEach(v => {
+    box.insertAdjacentHTML("beforeend",
+      `<span class="chip on" data-v="${esc(v)}" onclick="toggleChip(this,&quot;${key}&quot;)">${esc(v)}</span>`);
+  });
+  refreshCount(key);
+}
+
+async function init() {
+  try {
+    masters = await apiGet({ action: "masters" });
+    try { localStorage.setItem("masters", JSON.stringify(masters)); } catch (e) {}
+  } catch (e) {
+    try { masters = JSON.parse(localStorage.getItem("masters") || "null"); } catch (e2) { masters = null; }
+  }
+  if (!masters) {
+    document.querySelector("main").innerHTML =
+      '<div class="card"><h2>読み込めませんでした</h2>' +
+      '<p class="muted">電波の良い場所で一度アプリを開くと、次からは圏外でも使えるようになります。</p>' +
+      '<p class="center"><button class="btn btn-primary" onclick="location.reload()">再読み込み</button></p></div>';
+    return;
+  }
+
+  $("myName").value = localStorage.getItem("myName") || "";
+  buildSingleChips("chipsReporter", masters.reporters, "myName", name => {
+    localStorage.setItem("myName", name);
+    loadList();
+  });
+  syncSingle("chipsReporter", "myName");
+
+  buildSingleChips("chipsWeather", masters.weathers, "f_weather");
+  buildSingleChips("chipsEditReporter", masters.reporters, "f_reporter");
+  $("listDate").value = todayStr();
+  $("listDate").onchange = loadList;
+
+  // 会社名・協力会社名は masters.json から差し替える（別会社版を作れるように）
+  document.querySelectorAll(".partnerName").forEach(e => { e.textContent = masters.partner || "大工園"; });
+  APP_TITLE = masters.app_title || "工事日報";
+  document.title = APP_TITLE;
+  $("headerTitle").textContent = APP_TITLE;
+
+  buildChips("wJisha", masters.workers.jisha);
+  buildChips("wDaikuen", masters.workers.daikuen);
+  buildChips("vJisha", masters.vehicles.jisha);
+  buildChips("vDaikuen", masters.vehicles.daikuen);
+
+
+  const params = new URLSearchParams(location.search);
+  const editId = params.get("edit");
+  if (editId) {                      // 管理画面から編集で開かれた
+    adminMode = true;
+    await openReport(Number(editId));
+    return;
+  }
+  await refreshSyncBadge();
+  trySync();                                   // 起動時にたまっている分を送る
+  window.addEventListener("online", () => trySync());   // 電波が戻ったら送る
+  setInterval(() => { if (navigator.onLine) trySync(); }, 60000);
+
+  loadList();
+  if (params.get("new") === "1" && $("myName").value) newReport();
+}
+
+async function loadList() {
+  const name = $("myName").value;
+  const date = $("listDate").value;
+  const box = $("reportList");
+  if (!name) { box.innerHTML = '<p class="muted center">先に報告者を選択してください</p>'; return; }
+
+  try { await pullFromServer(name, date); } catch (e) { /* 圏外なら端末内のぶんだけ表示 */ }
+
+  const all = await localAll();
+  const list = all
+    .filter(r => !r.deleted && r.report.reporter === name && r.report.date === date)
+    .sort((a, b) => String(a.serverId || "").localeCompare(String(b.serverId || "")));
+
+  await refreshSyncBadge();
+
+  if (list.length === 0) { box.innerHTML = '<p class="muted center">まだ日報がありません</p>'; return; }
+  box.innerHTML = list.map(r => `
+    <div class="report-item" onclick="openReport('${r.localId}')">
+      <div>
+        <div class="title">${esc(r.report.kouji_mei) || "（工事名なし）"}</div>
+        <div class="sub">${esc(r.report.kouji_basho)}</div>
+      </div>
+      <span class="badge ${r.pending ? "pending" : r.report.status}">${
+        r.pending ? "未送信" : (r.report.status === "submitted" ? "提出済" : "下書き")
+      }</span>
+    </div>`).join("");
+}
+
+// ---------- 工事施工数量 ----------
+function addSekouRow(data) {
+  data = data || {};
+  const div = document.createElement("div");
+  div.className = "sekou-row";
+  div.innerHTML = `
+    <button class="btn btn-danger btn-small del" onclick="this.parentElement.remove()">×</button>
+    <div class="field"><label>工種</label><input type="text" class="s_koushu" value="${esc(data.koushu)}"></div>
+    <div class="field"><label>管径・種別</label><input type="text" class="s_kankei" value="${esc(data.kankei)}"></div>
+    <div class="row">
+      <div class="field"><label>延長</label><input type="text" class="s_enchou" inputmode="decimal" value="${esc(data.enchou)}"></div>
+      <div class="field"><label>箇所</label><input type="text" class="s_kasho" inputmode="numeric" value="${esc(data.kasho)}"></div>
+    </div>`;
+  $("sekouRows").appendChild(div);
+}
+
+function collectSekou() {
+  return [...document.querySelectorAll(".sekou-row")].map(r => ({
+    koushu: r.querySelector(".s_koushu").value.trim(),
+    kankei: r.querySelector(".s_kankei").value.trim(),
+    enchou: r.querySelector(".s_enchou").value.trim(),
+    kasho: r.querySelector(".s_kasho").value.trim(),
+  })).filter(s => s.koushu || s.kankei || s.enchou || s.kasho);
+}
+
+// ---------- 画面切り替え ----------
+function showEdit() {
+  $("listView").classList.add("hidden");
+  $("editView").classList.remove("hidden");
+  $("editFooter").classList.remove("hidden");
+  $("headerTitle").textContent = adminMode ? "日報の編集（管理）" : (editingId ? "日報の編集" : "新しい日報");
+  window.scrollTo(0, 0);
+}
+
+function backToList() {
+  if (adminMode) { location.href = "admin.html"; return; }
+  $("editView").classList.add("hidden");
+  $("editFooter").classList.add("hidden");
+  $("listView").classList.remove("hidden");
+  $("headerTitle").textContent = APP_TITLE;
+  loadList();
+  window.scrollTo(0, 0);
+}
+
+const TEXT_FIELDS = ["f_shussha", "f_kisha", "f_kouji_mei", "f_hacchusha", "f_kouji_basho", "f_koushu",
+  "f_jikan_from", "f_jikan_to", "f_sonota_kaisha", "f_sonota_num", "f_sagyouin_gaichu", "f_yudo_kaisha",
+  "f_yudo_a", "f_yudo_b", "f_lease_moto", "f_lease_name", "f_claim_joukyou", "f_claim_taiou",
+  "f_kikai1", "f_kikai2", "f_kikai_joukyou", "f_kikai_taiou", "f_bikou"];
+
+function clearForm() {
+  editingId = null;
+  $("f_date").value = $("listDate").value || todayStr();
+  $("f_weather").value = masters.weathers[0];
+  syncSingle("chipsWeather", "f_weather");
+  $("f_reporter").value = $("myName").value;
+  syncSingle("chipsEditReporter", "f_reporter");
+  TEXT_FIELDS.forEach(id => { $(id).value = ""; });
+  ["wJisha", "wDaikuen", "vJisha", "vDaikuen"].forEach(k => setChips(k, []));
+  $("sekouRows").innerHTML = "";
+  addSekouRow();
+  $("deleteCard").classList.add("hidden");
+}
+
+function newReport() {
+  if (!$("myName").value) { toast("先に報告者を選択してください"); return; }
+  clearForm();
+  showEdit();
+}
+
+function fillForm(d) {
+  $("f_date").value = d.date;
+  $("f_weather").value = d.weather || masters.weathers[0];
+  syncSingle("chipsWeather", "f_weather");
+  $("f_reporter").value = d.reporter || $("myName").value;
+  syncSingle("chipsEditReporter", "f_reporter");
+  const map = {
+    f_shussha: "shussha", f_kisha: "kisha", f_kouji_mei: "kouji_mei",
+    f_hacchusha: "hacchusha", f_kouji_basho: "kouji_basho", f_koushu: "koushu",
+    f_jikan_from: "jikan_from", f_jikan_to: "jikan_to",
+    f_sagyouin_gaichu: "sagyouin_gaichu", f_lease_moto: "lease_moto", f_lease_name: "lease_name",
+    f_claim_joukyou: "claim_joukyou", f_claim_taiou: "claim_taiou",
+    f_kikai1: "kikai1", f_kikai2: "kikai2", f_kikai_joukyou: "kikai_joukyou",
+    f_kikai_taiou: "kikai_taiou", f_bikou: "bikou",
+  };
+  for (const fid of Object.keys(map)) $(fid).value = d[map[fid]] || "";
+  const j = d.jinin || {};
+  $("f_sonota_kaisha").value = j.sonota_kaisha || "";
+  $("f_sonota_num").value = j.sonota == null ? "" : j.sonota;
+  $("f_yudo_kaisha").value = j.yudo_kaisha || "";
+  $("f_yudo_a").value = j.yudo_a == null ? "" : j.yudo_a;
+  $("f_yudo_b").value = j.yudo_b == null ? "" : j.yudo_b;
+  setChips("wJisha", d.sagyouin_jisha);
+  setChips("wDaikuen", d.sagyouin_daikuen);
+  setChips("vJisha", d.sharyo_jisha);
+  setChips("vDaikuen", d.sharyo_daikuen);
+  $("sekouRows").innerHTML = "";
+  const sekou = d.sekou && d.sekou.length ? d.sekou : [{}];
+  sekou.forEach(s => addSekouRow(s));
+}
+
+async function openReport(id) {
+  if (adminMode) {                       // 管理画面からはサーバーを直接読み書きする
+    const d = await apiGet({ action: "get", id: id });
+    editingId = id;
+    fillForm(d);
+  } else {
+    const rec = await localGet(id);
+    if (!rec) { toast("日報が見つかりません"); return; }
+    editingId = rec.localId;
+    fillForm(rec.report);
+  }
+  $("deleteCard").classList.remove("hidden");
+  $("reporterField").classList.toggle("hidden", !adminMode);
+  showEdit();
+}
+
+async function copyLast() {
+  const name = $("myName").value;
+  if (!name) { toast("先に報告者を選択してください"); return; }
+  const all = await localAll();
+  const mine = all
+    .filter(r => !r.deleted && r.report.reporter === name)
+    .sort((a, b) => (b.report.date || "").localeCompare(a.report.date || ""));
+  let last = mine.length ? mine[0].report : null;
+  if (!last) {                                  // 端末に無ければサーバーから
+    try {
+      const list = await apiGet({ action: "list", full: "1", reporter: name });
+      if (list.length) last = list[0];
+    } catch (e) { /* 圏外 */ }
+  }
+  if (!last) { toast("過去の日報がありません"); return; }
+  editingId = null;
+  fillForm(last);
+  $("f_date").value = $("listDate").value || todayStr();
+  ["f_shussha", "f_kisha", "f_claim_joukyou", "f_claim_taiou", "f_kikai1", "f_kikai2",
+    "f_kikai_joukyou", "f_kikai_taiou", "f_bikou"].forEach(id => { $(id).value = ""; });
+  $("sekouRows").innerHTML = "";
+  addSekouRow();
+  $("deleteCard").classList.add("hidden");
+  showEdit();
+  toast("前回の内容をコピーしました");
+}
+
+function collectForm(status) {
+  const num = v => v === "" ? "" : Number(v);
+  return {
+    date: $("f_date").value,
+    reporter: $("f_reporter").value || $("myName").value,
+    status: status,
+    weather: $("f_weather").value,
+    shussha: $("f_shussha").value,
+    kisha: $("f_kisha").value,
+    kouji_mei: $("f_kouji_mei").value.trim(),
+    hacchusha: $("f_hacchusha").value.trim(),
+    kouji_basho: $("f_kouji_basho").value.trim(),
+    koushu: $("f_koushu").value.trim(),
+    jikan_from: $("f_jikan_from").value,
+    jikan_to: $("f_jikan_to").value,
+    jinin: {
+      sonota_kaisha: $("f_sonota_kaisha").value.trim(),
+      sonota: num($("f_sonota_num").value),
+      yudo_kaisha: $("f_yudo_kaisha").value.trim(),
+      yudo_a: num($("f_yudo_a").value),
+      yudo_b: num($("f_yudo_b").value),
+    },
+    sagyouin_jisha: picked.wJisha.slice(),
+    sagyouin_daikuen: picked.wDaikuen.slice(),
+    sagyouin_gaichu: $("f_sagyouin_gaichu").value.trim(),
+    sharyo_jisha: picked.vJisha.slice(),
+    sharyo_daikuen: picked.vDaikuen.slice(),
+    lease_moto: $("f_lease_moto").value.trim(),
+    lease_name: $("f_lease_name").value.trim(),
+    claim_joukyou: $("f_claim_joukyou").value.trim(),
+    claim_taiou: $("f_claim_taiou").value.trim(),
+    kikai1: $("f_kikai1").value.trim(),
+    kikai2: $("f_kikai2").value.trim(),
+    kikai_joukyou: $("f_kikai_joukyou").value.trim(),
+    kikai_taiou: $("f_kikai_taiou").value.trim(),
+    bikou: $("f_bikou").value.trim(),
+    sekou: collectSekou(),
+  };
+}
+
+async function saveReport(status) {
+  if (!$("f_date").value) { toast("日付を入力してください"); return; }
+  const report = collectForm(status);
+
+  if (adminMode) {                       // 管理画面からの編集はサーバーへ直接
+    try {
+      await apiPost({ action: "save", id: editingId, report: report });
+      toast(status === "submitted" ? "保存しました" : "下書きとして保存しました");
+      if (status === "submitted") backToList();
+    } catch (e) { toast("保存に失敗: " + e.message); }
+    return;
+  }
+
+  // まず端末に保存する（ここは電波が無くても必ず成功する）
+  let rec = editingId ? await localGet(editingId) : null;
+  if (!rec) rec = { localId: newLocalId(), serverId: null, deleted: false };
+  rec.report = report;
+  rec.pending = true;
+  await localPut(rec);
+  editingId = rec.localId;
+  $("deleteCard").classList.remove("hidden");
+
+  toast(status === "submitted" ? "提出しました" : "下書き保存しました");
+  const r = await trySync();             // つながっていればそのまま送信
+  if (r && r.failed) toast("端末に保存しました（電波が戻ったら自動送信します）");
+  if (status === "submitted") backToList();
+}
+
+async function deleteReport() {
+  if (!editingId) return;
+  if (!confirm("この日報を削除しますか？")) return;
+  if (adminMode) {
+    await apiPost({ action: "delete", id: editingId });
+  } else {
+    const rec = await localGet(editingId);
+    if (rec && rec.serverId) {           // サーバーにもある分は削除を予約して送る
+      rec.deleted = true; rec.pending = true;
+      await localPut(rec);
+      await trySync();
+    } else if (rec) {
+      await localDel(rec.localId);       // まだ送っていない分はその場で消える
+    }
+  }
+  toast("削除しました");
+  backToList();
+}
+
+function showOfflineState(state, detail) {
+  const el = $("offlineState");
+  if (!el) return;
+  if (state === "ok") {
+    el.textContent = "オフライン対応：準備完了（圏外でも書けます）";
+    el.style.color = "#2e7d32";
+  } else {
+    el.textContent = "オフライン対応：未対応" + (detail ? "（" + detail + "）" : "");
+    el.style.color = "#c62828";
+  }
+}
+
+if (!("serviceWorker" in navigator) || !window.isSecureContext) {
+  window.addEventListener("load", () => showOfflineState("ng", "httpsでないため"));
+}
+
+init();
+</script>
+<script>
+// アプリとしてホーム画面から起動できるようにする（https または localhost でのみ有効）
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("sw.js?v=1");
+      await navigator.serviceWorker.ready;
+      // 実際にアプリ画面が保存されたかまで確認する
+      for (let i = 0; i < 12; i++) {
+        const page = await caches.match("./", { ignoreSearch: true });
+        const mst  = localStorage.getItem("masters");
+        if (page && mst) { showOfflineState("ok"); return; }
+        await new Promise(r => setTimeout(r, 700));
+      }
+      showOfflineState("ng", "保存に失敗");
+    } catch (e) {
+      showOfflineState("ng", e.message);
+    }
+  });
+}
+</script>
+</body>
+</html>

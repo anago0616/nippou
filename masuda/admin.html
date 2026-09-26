@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工事日報 管理画面</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1565c0">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="増田日報">
+<script src="config.js"></script>
+<style>
+  :root { --blue: #1565c0; --bg: #f2f4f7; --line: #d0d5dd; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; background: var(--bg); color: #1a1a1a; }
+  header { background: var(--blue); color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  header a { color: #fff; font-size: 13px; text-decoration: none; border: 1px solid rgba(255,255,255,.6); padding: 4px 10px; border-radius: 6px; }
+  main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .filters label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; }
+  input, select { padding: 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 6px; }
+  .btn { padding: 9px 16px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-outline { background: #fff; color: var(--blue); border: 1px solid var(--blue); }
+  .btn-danger { background: #fff; color: #c62828; border: 1px solid #c62828; }
+  .btn-small { padding: 5px 10px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 9px 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
+  th { background: #f7f8fa; font-size: 13px; color: #555; white-space: nowrap; }
+  tr:hover td { background: #f0f6ff; }
+  .badge { font-size: 12px; padding: 2px 10px; border-radius: 12px; white-space: nowrap; }
+  .badge.draft { background: #fff3e0; color: #e65100; }
+  .badge.submitted { background: #e8f5e9; color: #2e7d32; }
+  .missing { display: flex; flex-wrap: wrap; gap: 6px; }
+  .missing span { background: #ffebee; color: #b71c1c; padding: 4px 12px; border-radius: 14px; font-size: 13px; }
+  .missing span.ok { background: #e8f5e9; color: #2e7d32; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--blue); }
+  .muted { color: #888; font-size: 13px; }
+  .nowrap { white-space: nowrap; }
+
+  /* ===== スマホ表示 =====
+     PC用の表のままだと横にはみ出して工事名が縦1文字ずつになるため、
+     狭い画面では1件ずつのカードに組み替える */
+  @media (max-width: 760px) {
+    header { padding: 12px 14px; }
+    main { padding: 12px; }
+    .card { padding: 14px; }
+    .filters { gap: 10px; }
+    .filters > div { flex: 1 1 46%; min-width: 0; }
+    .filters input, .filters select { width: 100%; }
+    .filters .btn { flex: 1 1 46%; padding: 12px 10px; font-size: 15px; }
+
+    table, tbody, tr, td { display: block; width: 100%; }
+    thead { display: none; }
+    th, td { border: none; }
+    tr { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    tr:hover td { background: transparent; }
+    td { padding: 3px 0; font-size: 14px; }
+    td[data-label]::before {
+      content: attr(data-label) "：";
+      color: #888; font-size: 12px; margin-right: 4px;
+    }
+    td.t-title { font-size: 15px; font-weight: 600; padding: 4px 0 6px; }
+    td.t-title::before { display: none; }
+    td.t-actions { display: flex; gap: 8px; margin-top: 10px; padding: 0; }
+    td.t-actions .btn { flex: 1; padding: 10px 6px; font-size: 14px; white-space: nowrap; }
+    td.t-empty { text-align: center; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>工事日報 管理画面</h1>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <span style="font-size:11px; opacity:.8;">v14</span>
+    <a href="index.html">入力画面へ</a>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <div class="filters">
+      <div>
+        <label>表示方法</label>
+        <select id="mode" onchange="modeChanged()">
+          <option value="date">日付で表示</option>
+          <option value="month">月で表示</option>
+        </select>
+      </div>
+      <div id="dateBox">
+        <label>日付</label>
+        <input type="date" id="fDate">
+      </div>
+      <div id="monthBox" style="display:none;">
+        <label>月</label>
+        <input type="month" id="fMonth">
+      </div>
+      <div>
+        <label>報告者</label>
+        <select id="fReporter"><option value="">全員</option></select>
+      </div>
+      <button class="btn btn-primary" onclick="load()">表示</button>
+      <button class="btn btn-outline" onclick="printAll()">表示中を全部印刷</button>
+    </div>
+  </div>
+
+  <div class="card" id="missingCard">
+    <h2>提出状況（この日）</h2>
+    <div class="missing" id="missingBox"></div>
+    <p class="muted" style="margin:8px 0 0;">緑＝提出あり ／ 赤＝日報なし</p>
+  </div>
+
+  <div class="card">
+    <h2>日報一覧 <span class="muted" id="countLabel"></span></h2>
+    <table>
+      <thead><tr>
+        <th>日付</th><th>報告者</th><th>工事名</th><th>工事場所</th><th>状態</th><th>更新</th><th></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+let masters = null;
+const $ = id => document.getElementById(id);
+const todayStr = () => new Date().toLocaleDateString("sv-SE");
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// ===== Googleスプレッドシート(GAS)との通信 =====
+const API = window.NIPPOU.api;
+const CO  = window.NIPPOU.co;
+
+async function apiGet(params) {
+  const q = new URLSearchParams(Object.assign({ co: CO }, params));
+  const res = await fetch(API + "?" + q.toString());
+  if (!res.ok) throw new Error("通信エラー");
+  const d = await res.json();
+  if (d && d.error) throw new Error(d.error);
+  return d;
+}
+
+async function apiPost(body) {
+  const res = await fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(Object.assign({ co: CO }, body))
+  });
+  if (!res.ok) throw new Error("通信エラー");
+  const d = await res.json();
+  if (d && d.error) throw new Error(d.error);
+  return d;
+}
+
+function modeChanged() {
+  const m = $("mode").value;
+  $("dateBox").style.display = m === "date" ? "" : "none";
+  $("monthBox").style.display = m === "month" ? "" : "none";
+  $("missingCard").style.display = m === "date" ? "" : "none";
+  load();
+}
+
+function query() {
+  const m = $("mode").value;
+  const p = { action: "list" };
+  if (m === "date") p.date = $("fDate").value;
+  else p.month = $("fMonth").value;
+  if ($("fReporter").value) p.reporter = $("fReporter").value;
+  return p;
+}
+
+async function load() {
+  const list = await apiGet(query());
+  $("countLabel").textContent = `（${list.length}件）`;
+  $("tbody").innerHTML = list.length === 0
+    ? '<tr><td colspan="7" class="muted t-empty">日報がありません</td></tr>'
+    : list.map(r => `
+      <tr>
+        <td class="nowrap" data-label="日付">${esc(r.date)}</td>
+        <td class="nowrap" data-label="報告者">${esc(r.reporter)}</td>
+        <td class="t-title">${esc(r.kouji_mei) || "（工事名なし）"}</td>
+        <td data-label="場所">${esc(r.kouji_basho)}</td>
+        <td data-label="状態"><span class="badge ${r.status}">${r.status === "submitted" ? "提出済" : "下書き"}</span></td>
+        <td class="nowrap muted" data-label="更新">${esc((r.updated_at || "").slice(5, 16))}</td>
+        <td class="nowrap t-actions">
+          <button class="btn btn-primary btn-small" onclick="location.href='index.html?edit=${r.id}'">編集</button>
+          <button class="btn btn-outline btn-small" onclick="window.open('print.html?ids=${r.id}')">印刷</button>
+          <button class="btn btn-danger btn-small" onclick="del(${r.id})">削除</button>
+        </td>
+      </tr>`).join("");
+
+  // 提出状況（日付表示のときのみ）
+  if ($("mode").value === "date") {
+    const submitted = new Set(list.map(r => r.reporter));
+    $("missingBox").innerHTML = masters.reporters.map(w =>
+      `<span class="${submitted.has(w) ? "ok" : ""}">${esc(w)}</span>`).join("");
+  }
+}
+
+async function del(id) {
+  if (!confirm("この日報を削除しますか？")) return;
+  await apiPost({ action: "delete", id: id });
+  load();
+}
+
+async function printAll() {
+  const list = await apiGet(query());
+  if (list.length === 0) { alert("印刷する日報がありません"); return; }
+  window.open("print.html?ids=" + list.map(r => r.id).join(","));
+}
+
+async function init() {
+  masters = await apiGet({ action: "masters" });
+  const t = (masters.app_title || "工事日報") + " 管理画面";
+  document.title = t;
+  document.querySelector("header h1").textContent = t;
+  $("fReporter").innerHTML = '<option value="">全員</option>' +
+    masters.reporters.map(w => `<option>${w}</option>`).join("");
+  $("fDate").value = todayStr();
+  $("fMonth").value = todayStr().slice(0, 7);
+  load();
+}
+init();
+</script>
+<script>
+// アプリとしてホーム画面から起動できるようにする（https または localhost でのみ有効）
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=1").catch(() => {}));
+}
+</script>
+</body>
+</html>
