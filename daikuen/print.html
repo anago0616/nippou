@@ -259,7 +259,7 @@ function renderSheet(r) {
               </div>
               <div class="lname">
                 <div class="lh">車両名</div>
-                <div class="lb">${esc(r.lease_name || "")}</div>
+                <div class="lb">${esc([r.lease_name, r.lease_name2].filter(Boolean).join("　"))}</div>
               </div>
             </div>
           </div>
@@ -305,11 +305,15 @@ function renderSheet(r) {
 const API = window.NIPPOU.api;
 const CO  = window.NIPPOU.co;
 
+function secret() { try { return localStorage.getItem("key") || ""; } catch (e) { return ""; } }
+
 async function apiGet(params) {
-  const q = new URLSearchParams(Object.assign({ co: CO }, params));
+  const q = new URLSearchParams(Object.assign({ co: CO, key: secret() }, params));
   const res = await fetch(API + "?" + q.toString());
   if (!res.ok) throw new Error("通信エラー");
-  return res.json();
+  const d = await res.json();
+  if (d && d.auth) { document.getElementById("info").textContent = "合言葉が必要です。入力画面から入り直してください。"; throw new Error("auth"); }
+  return d;
 }
 
 async function init() {
@@ -328,7 +332,7 @@ init();
 <script>
 // アプリとしてホーム画面から起動できるようにする（https または localhost でのみ有効）
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=1").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=2").catch(() => {}));
 }
 </script>
 </body>

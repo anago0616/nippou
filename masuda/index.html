@@ -77,6 +77,11 @@
   #syncBadge { font-size: 12px; background: #fff3e0; color: #e65100; padding: 4px 10px; border-radius: 12px; cursor: pointer; white-space: nowrap; }
   #syncBadge.ok { background: rgba(255,255,255,.2); color: #fff; }
   .badge.pending { background: #fff3e0; color: #e65100; }
+  #keyGate { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #keyGate .gate-inner { background: #fff; border-radius: 12px; padding: 24px; max-width: 420px; width: 100%; box-shadow: 0 2px 10px rgba(0,0,0,.1); }
+  #keyGate h2 { font-size: 18px; margin: 0 0 8px; color: var(--blue); }
+  #keyGate input { display: block; width: 100%; min-height: 46px; padding: 11px 10px; font-size: 16px; border: 1px solid var(--line); border-radius: 8px; margin: 14px 0 4px; }
+  #keyGate .btn { width: 100%; }
 </style>
 </head>
 <body>
@@ -84,7 +89,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v14</span>
+    <span style="font-size:11px; opacity:.8;">v15</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -186,7 +191,10 @@
       <div class="subgroup">
         <div class="row">
           <div class="field"><label>リース 貸出元</label><input type="text" id="f_lease_moto"></div>
-          <div class="field"><label>リース 車両名</label><input type="text" id="f_lease_name"></div>
+          <div class="field"><label>リース 車両名(1)</label><input type="text" id="f_lease_name"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>リース 車両名(2)</label><input type="text" id="f_lease_name2"></div>
         </div>
       </div>
     </div>
@@ -261,11 +269,19 @@ function toast(msg) {
 const API = window.NIPPOU.api;      // config.js で指定
 const CO  = window.NIPPOU.co;       // "masuda" / "daikuen"
 
+function secret() { try { return localStorage.getItem("key") || ""; } catch (e) { return ""; } }
+
+// 合言葉が違うときは入力画面を出す
+function needKey(d) {
+  if (d && d.auth) { askKey(); throw new Error("合言葉が必要です"); }
+  return d;
+}
+
 async function apiGet(params) {
-  const q = new URLSearchParams(Object.assign({ co: CO }, params));
+  const q = new URLSearchParams(Object.assign({ co: CO, key: secret() }, params));
   const res = await fetch(API + "?" + q.toString());
   if (!res.ok) throw new Error("通信エラー");
-  const d = await res.json();
+  const d = needKey(await res.json());
   if (d && d.error) throw new Error(d.error);
   return d;
 }
@@ -275,10 +291,10 @@ async function apiPost(body) {
   const res = await fetch(API, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(Object.assign({ co: CO }, body))
+    body: JSON.stringify(Object.assign({ co: CO, key: secret() }, body))
   });
   if (!res.ok) throw new Error("通信エラー");
-  const d = await res.json();
+  const d = needKey(await res.json());
   if (d && d.error) throw new Error(d.error);
   return d;
 }
@@ -442,6 +458,7 @@ function setChips(key, values) {
 }
 
 async function init() {
+  if (!secret()) { askKey(); return; }
   try {
     masters = await apiGet({ action: "masters" });
     try { localStorage.setItem("masters", JSON.stringify(masters)); } catch (e) {}
@@ -570,7 +587,7 @@ function backToList() {
 
 const TEXT_FIELDS = ["f_shussha", "f_kisha", "f_kouji_mei", "f_hacchusha", "f_kouji_basho", "f_koushu",
   "f_jikan_from", "f_jikan_to", "f_sonota_kaisha", "f_sonota_num", "f_sagyouin_gaichu", "f_yudo_kaisha",
-  "f_yudo_a", "f_yudo_b", "f_lease_moto", "f_lease_name", "f_claim_joukyou", "f_claim_taiou",
+  "f_yudo_a", "f_yudo_b", "f_lease_moto", "f_lease_name", "f_lease_name2", "f_claim_joukyou", "f_claim_taiou",
   "f_kikai1", "f_kikai2", "f_kikai_joukyou", "f_kikai_taiou", "f_bikou"];
 
 function clearForm() {
@@ -603,7 +620,7 @@ function fillForm(d) {
     f_shussha: "shussha", f_kisha: "kisha", f_kouji_mei: "kouji_mei",
     f_hacchusha: "hacchusha", f_kouji_basho: "kouji_basho", f_koushu: "koushu",
     f_jikan_from: "jikan_from", f_jikan_to: "jikan_to",
-    f_sagyouin_gaichu: "sagyouin_gaichu", f_lease_moto: "lease_moto", f_lease_name: "lease_name",
+    f_sagyouin_gaichu: "sagyouin_gaichu", f_lease_moto: "lease_moto", f_lease_name: "lease_name", f_lease_name2: "lease_name2",
     f_claim_joukyou: "claim_joukyou", f_claim_taiou: "claim_taiou",
     f_kikai1: "kikai1", f_kikai2: "kikai2", f_kikai_joukyou: "kikai_joukyou",
     f_kikai_taiou: "kikai_taiou", f_bikou: "bikou",
@@ -696,6 +713,7 @@ function collectForm(status) {
     sharyo_daikuen: picked.vDaikuen.slice(),
     lease_moto: $("f_lease_moto").value.trim(),
     lease_name: $("f_lease_name").value.trim(),
+    lease_name2: $("f_lease_name2").value.trim(),
     claim_joukyou: $("f_claim_joukyou").value.trim(),
     claim_taiou: $("f_claim_taiou").value.trim(),
     kikai1: $("f_kikai1").value.trim(),
@@ -754,6 +772,31 @@ async function deleteReport() {
   backToList();
 }
 
+// ===== 合言葉の入力画面 =====
+function askKey(msg) {
+  if (document.getElementById("keyGate")) return;
+  const g = document.createElement("div");
+  g.id = "keyGate";
+  g.innerHTML =
+    '<div class="gate-inner">' +
+      '<h2>合言葉を入力してください</h2>' +
+      '<p class="muted">初回だけ必要です。会社から伝えられた合言葉を入れてください。</p>' +
+      '<input type="password" id="keyInput" autocomplete="current-password" inputmode="text">' +
+      '<p class="muted" id="keyMsg" style="color:#c62828;min-height:20px;">' + (msg || "") + '</p>' +
+      '<button class="btn btn-primary" id="keyBtn">決定</button>' +
+    '</div>';
+  document.body.appendChild(g);
+  const go = () => {
+    const v = document.getElementById("keyInput").value.trim();
+    if (!v) return;
+    try { localStorage.setItem("key", v); } catch (e) {}
+    location.reload();
+  };
+  document.getElementById("keyBtn").onclick = go;
+  document.getElementById("keyInput").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  document.getElementById("keyInput").focus();
+}
+
 function showOfflineState(state, detail) {
   const el = $("offlineState");
   if (!el) return;
@@ -777,7 +820,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=1");
+      await navigator.serviceWorker.register("sw.js?v=2");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {

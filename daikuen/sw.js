@@ -1,6 +1,6 @@
 // 工事日報アプリ サービスワーカー（クラウド版）
 // このフォルダの画面だけを保存する。データはGoogleスプレッドシート側なので触らない。
-const CACHE = "nippou-daikuen-v1";
+const CACHE = "nippou-daikuen-v2";
 const SHELL = [
   "./", "./index.html", "./admin.html", "./print.html",
   "./config.js", "./manifest.webmanifest",
