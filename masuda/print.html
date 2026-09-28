@@ -56,8 +56,7 @@
 
   /* ---- メインブロック ---- */
   .main { display: flex; border: 1.2pt solid #000; margin-top: 2.5mm; height: 128mm; }
-  .main-left { flex: 1; display: flex; flex-direction: column; border-right: 1.2pt solid #000; }
-  .main-right { width: 52mm; display: flex; flex-direction: column; }
+  .main-left { flex: 1; display: flex; flex-direction: column; }   /* 右の帯を廃止したため境界線なし */
 
   .sec-hdr { border-bottom: .6pt solid #000; text-align: center; font-size: 9pt; height: 5mm; line-height: 5mm; }
 
@@ -105,17 +104,6 @@
   table.sekou-t th:last-child, table.sekou-t td:last-child { border-right: none; }
   table.sekou-t tr:last-child td { border-bottom: none; }
 
-  /* 右カラム */
-  .r-hdr { text-align: center; font-size: 9pt; border-bottom: .5pt solid #000; height: 4.5mm; line-height: 4.5mm; background: #fff; }
-  .r-body { padding: 1mm; font-size: 9pt; white-space: pre-wrap; overflow: hidden; border-bottom: .5pt solid #000; }
-  .r-body:last-child { border-bottom: none; }
-  .r-claim { height: 24mm; }
-  .r-ctaiou { height: 22mm; }
-  .r-kikai-line { display: flex; height: 5.5mm; border-bottom: .5pt solid #000; font-size: 9pt; align-items: center; }
-  .r-kikai-line .n { width: 6mm; text-align: center; border-right: .5pt solid #000; align-self: stretch; display: flex; align-items: center; justify-content: center; }
-  .r-kikai-line .v { flex: 1; padding: 0 1mm; overflow: hidden; white-space: nowrap; }
-  .r-kjou { height: 20mm; }
-  .r-ktai { flex: 1; }
 
   @media print {
     body { background: #fff; }
@@ -285,19 +273,6 @@ function renderSheet(r) {
         </div>
       </div>
 
-      <div class="main-right">
-        <div class="r-hdr">クレーム状況</div>
-        <div class="r-body r-claim">${esc(r.claim_joukyou || "")}</div>
-        <div class="r-hdr">対応</div>
-        <div class="r-body r-ctaiou">${esc(r.claim_taiou || "")}</div>
-        <div class="r-hdr">使用機械の異常</div>
-        <div class="r-kikai-line"><div class="n">①</div><div class="v">${esc(r.kikai1 || "")}</div></div>
-        <div class="r-kikai-line"><div class="n">②</div><div class="v">${esc(r.kikai2 || "")}</div></div>
-        <div class="r-hdr">状況</div>
-        <div class="r-body r-kjou">${esc(r.kikai_joukyou || "")}</div>
-        <div class="r-hdr">対応</div>
-        <div class="r-body r-ktai" style="border-bottom:none;">${esc(r.kikai_taiou || "")}</div>
-      </div>
     </div>
   </div>`;
 }
@@ -332,7 +307,7 @@ init();
 <script>
 // アプリとしてホーム画面から起動できるようにする（https または localhost でのみ有効）
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=7").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=8").catch(() => {}));
 }
 </script>
 </body>

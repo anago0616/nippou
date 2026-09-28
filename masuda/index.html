@@ -93,7 +93,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v20</span>
+    <span style="font-size:11px; opacity:.8;">v21</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -201,20 +201,6 @@
           <div class="field"><label>リース 車両名(2)</label><input type="text" id="f_lease_name2"></div>
         </div>
       </div>
-    </div>
-
-    <div class="card">
-      <h2>クレーム状況</h2>
-      <div class="field"><label>状況</label><textarea id="f_claim_joukyou"></textarea></div>
-      <div class="field"><label>対応</label><textarea id="f_claim_taiou"></textarea></div>
-    </div>
-
-    <div class="card">
-      <h2>使用機械の異常</h2>
-      <div class="field"><label>①</label><input type="text" id="f_kikai1"></div>
-      <div class="field"><label>②</label><input type="text" id="f_kikai2"></div>
-      <div class="field"><label>状況</label><textarea id="f_kikai_joukyou"></textarea></div>
-      <div class="field"><label>対応</label><textarea id="f_kikai_taiou"></textarea></div>
     </div>
 
     <div class="card">
@@ -628,8 +614,7 @@ function backToList(force) {
 
 const TEXT_FIELDS = ["f_shussha", "f_kisha", "f_kouji_mei", "f_hacchusha", "f_kouji_basho", "f_koushu",
   "f_jikan_from", "f_jikan_to", "f_sonota_kaisha", "f_sonota_num", "f_sagyouin_gaichu", "f_yudo_kaisha",
-  "f_yudo_a", "f_yudo_b", "f_lease_moto", "f_lease_name", "f_lease_name2", "f_claim_joukyou", "f_claim_taiou",
-  "f_kikai1", "f_kikai2", "f_kikai_joukyou", "f_kikai_taiou", "f_bikou"];
+  "f_yudo_a", "f_yudo_b", "f_lease_moto", "f_lease_name", "f_lease_name2", "f_bikou"];
 
 function clearForm() {
   editingId = null;
@@ -667,9 +652,7 @@ function fillForm(d) {
     f_hacchusha: "hacchusha", f_kouji_basho: "kouji_basho", f_koushu: "koushu",
     f_jikan_from: "jikan_from", f_jikan_to: "jikan_to",
     f_sagyouin_gaichu: "sagyouin_gaichu", f_lease_moto: "lease_moto", f_lease_name: "lease_name", f_lease_name2: "lease_name2",
-    f_claim_joukyou: "claim_joukyou", f_claim_taiou: "claim_taiou",
-    f_kikai1: "kikai1", f_kikai2: "kikai2", f_kikai_joukyou: "kikai_joukyou",
-    f_kikai_taiou: "kikai_taiou", f_bikou: "bikou",
+    f_bikou: "bikou",
   };
   for (const fid of Object.keys(map)) $(fid).value = d[map[fid]] || "";
   const j = d.jinin || {};
@@ -722,8 +705,7 @@ async function copyLast() {
   editingId = null;
   fillForm(last);
   $("f_date").value = $("listDate").value || todayStr();
-  ["f_shussha", "f_kisha", "f_claim_joukyou", "f_claim_taiou", "f_kikai1", "f_kikai2",
-    "f_kikai_joukyou", "f_kikai_taiou", "f_bikou"].forEach(id => { $(id).value = ""; });
+  ["f_shussha", "f_kisha", "f_bikou"].forEach(id => { $(id).value = ""; });
   $("f_shussha").value = "08:00";
   $("f_kisha").value = "17:00";
   $("f_jikan_from").value = "09:00";
@@ -765,12 +747,6 @@ function collectForm(status) {
     lease_moto: $("f_lease_moto").value.trim(),
     lease_name: $("f_lease_name").value.trim(),
     lease_name2: $("f_lease_name2").value.trim(),
-    claim_joukyou: $("f_claim_joukyou").value.trim(),
-    claim_taiou: $("f_claim_taiou").value.trim(),
-    kikai1: $("f_kikai1").value.trim(),
-    kikai2: $("f_kikai2").value.trim(),
-    kikai_joukyou: $("f_kikai_joukyou").value.trim(),
-    kikai_taiou: $("f_kikai_taiou").value.trim(),
     bikou: $("f_bikou").value.trim(),
     sekou: collectSekou(),
   };
@@ -875,7 +851,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=7");
+      await navigator.serviceWorker.register("sw.js?v=8");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {
