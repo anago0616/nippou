@@ -78,7 +78,7 @@
 <header>
   <h1>工事日報 管理画面</h1>
   <div style="display:flex; align-items:center; gap:10px;">
-    <span style="font-size:11px; opacity:.8;">v18</span>
+    <span style="font-size:11px; opacity:.8;">v19</span>
     <a href="index.html">入力画面へ</a>
   </div>
 </header>
@@ -263,7 +263,7 @@ init();
 <script>
 // アプリとしてホーム画面から起動できるようにする（https または localhost でのみ有効）
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=5").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=6").catch(() => {}));
 }
 </script>
 </body>

@@ -82,6 +82,10 @@
   #keyGate h2 { font-size: 18px; margin: 0 0 8px; color: var(--blue); }
   #keyGate input { display: block; width: 100%; min-height: 46px; padding: 11px 10px; font-size: 16px; border: 1px solid var(--line); border-radius: 8px; margin: 14px 0 4px; }
   #keyGate .btn { width: 100%; }
+  #saveGate { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 210; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #saveGate .gate-inner { background: #fff; border-radius: 12px; padding: 24px; max-width: 420px; width: 100%; }
+  #saveGate h2 { font-size: 18px; margin: 0 0 8px; color: var(--blue); }
+  #saveGate .btn { width: 100%; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -89,7 +93,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v18</span>
+    <span style="font-size:11px; opacity:.8;">v19</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -245,6 +249,8 @@ let masters = null;
 let editingId = null;
 let adminMode = false;   // 管理画面から「編集」で開いたとき true
 let APP_TITLE = "工事日報";
+let formSnapshot = null;      // 編集開始時の内容（変更されたか判定するため）
+let currentStatus = "draft";  // この日報が下書きか提出済みか
 const picked = { wJisha: [], wDaikuen: [], vJisha: [], vDaikuen: [] };
 const GROUPS = {
   wJisha:   { box: "chipsJisha",      count: "cntJisha",      unit: "人" },
@@ -566,15 +572,51 @@ function collectSekou() {
 }
 
 // ---------- 画面切り替え ----------
+function snapshotForm() {
+  try { formSnapshot = JSON.stringify(collectForm("-")); } catch (e) { formSnapshot = null; }
+}
+
+function isDirty() {
+  if (formSnapshot === null) return false;
+  try { return JSON.stringify(collectForm("-")) !== formSnapshot; } catch (e) { return false; }
+}
+
+// 戻るときに、保存していない内容があれば確認する
+function askSave() {
+  if (document.getElementById("saveGate")) return;
+  const g = document.createElement("div");
+  g.id = "saveGate";
+  g.innerHTML =
+    '<div class="gate-inner">' +
+      '<h2>保存していない内容があります</h2>' +
+      '<p class="muted">このまま戻ると、入力した内容は消えます。</p>' +
+      '<button class="btn btn-primary" id="gateSave">保存して戻る</button>' +
+      '<button class="btn btn-danger" id="gateDiscard">保存せずに戻る</button>' +
+      '<button class="btn" id="gateStay" style="background:#eee;">編集を続ける</button>' +
+    '</div>';
+  document.body.appendChild(g);
+  const close = () => g.remove();
+  document.getElementById("gateStay").onclick = close;
+  document.getElementById("gateDiscard").onclick = () => { close(); backToList(true); };
+  document.getElementById("gateSave").onclick = async () => {
+    close();
+    await saveReport(currentStatus);
+    backToList(true);
+  };
+}
+
 function showEdit() {
   $("listView").classList.add("hidden");
   $("editView").classList.remove("hidden");
   $("editFooter").classList.remove("hidden");
   $("headerTitle").textContent = adminMode ? "日報の編集（管理）" : (editingId ? "日報の編集" : "新しい日報");
+  snapshotForm();
   window.scrollTo(0, 0);
 }
 
-function backToList() {
+function backToList(force) {
+  if (!force && isDirty()) { askSave(); return; }
+  formSnapshot = null;
   if (adminMode) { location.href = "admin.html"; return; }
   $("editView").classList.add("hidden");
   $("editFooter").classList.add("hidden");
@@ -603,6 +645,7 @@ function clearForm() {
   $("sekouRows").innerHTML = "";
   addSekouRow();
   $("deleteCard").classList.add("hidden");
+  currentStatus = "draft";
 }
 
 function newReport() {
@@ -640,6 +683,7 @@ function fillForm(d) {
   $("sekouRows").innerHTML = "";
   const sekou = d.sekou && d.sekou.length ? d.sekou : [{}];
   sekou.forEach(s => addSekouRow(s));
+  currentStatus = d.status || "draft";
 }
 
 async function openReport(id) {
@@ -735,8 +779,10 @@ async function saveReport(status) {
   if (adminMode) {                       // 管理画面からの編集はサーバーへ直接
     try {
       await apiPost({ action: "save", id: editingId, report: report });
+      currentStatus = status;
+      snapshotForm();
       toast(status === "submitted" ? "保存しました" : "下書きとして保存しました");
-      if (status === "submitted") backToList();
+      if (status === "submitted") backToList(true);
     } catch (e) { toast("保存に失敗: " + e.message); }
     return;
   }
@@ -750,10 +796,12 @@ async function saveReport(status) {
   editingId = rec.localId;
   $("deleteCard").classList.remove("hidden");
 
+  currentStatus = status;
+  snapshotForm();
   toast(status === "submitted" ? "提出しました" : "下書き保存しました");
   const r = await trySync();             // つながっていればそのまま送信
   if (r && r.failed) toast("端末に保存しました（電波が戻ったら自動送信します）");
-  if (status === "submitted") backToList();
+  if (status === "submitted") backToList(true);
 }
 
 async function deleteReport() {
@@ -772,7 +820,7 @@ async function deleteReport() {
     }
   }
   toast("削除しました");
-  backToList();
+  backToList(true);
 }
 
 // ===== 合言葉の入力画面 =====
@@ -823,7 +871,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=5");
+      await navigator.serviceWorker.register("sw.js?v=6");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {
