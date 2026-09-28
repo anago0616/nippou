@@ -93,7 +93,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v19</span>
+    <span style="font-size:11px; opacity:.8;">v20</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -641,6 +641,8 @@ function clearForm() {
   TEXT_FIELDS.forEach(id => { $(id).value = ""; });
   $("f_shussha").value = "08:00";      // 出社の初期値
   $("f_kisha").value = "17:00";        // 帰社の初期値
+  $("f_jikan_from").value = "09:00";   // 作業時間の初期値
+  $("f_jikan_to").value = "17:00";
   ["wJisha", "wDaikuen", "vJisha", "vDaikuen"].forEach(k => setChips(k, []));
   $("sekouRows").innerHTML = "";
   addSekouRow();
@@ -724,6 +726,8 @@ async function copyLast() {
     "f_kikai_joukyou", "f_kikai_taiou", "f_bikou"].forEach(id => { $(id).value = ""; });
   $("f_shussha").value = "08:00";
   $("f_kisha").value = "17:00";
+  $("f_jikan_from").value = "09:00";
+  $("f_jikan_to").value = "17:00";
   $("sekouRows").innerHTML = "";
   addSekouRow();
   $("deleteCard").classList.add("hidden");
@@ -871,7 +875,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=6");
+      await navigator.serviceWorker.register("sw.js?v=7");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {

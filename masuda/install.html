@@ -137,7 +137,7 @@ if (window.matchMedia("(display-mode: standalone)").matches || navigator.standal
 
 // インストールできる状態にするため、サービスワーカーを登録しておく
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=6").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=7").catch(() => {}));
 }
 </script>
 </body>

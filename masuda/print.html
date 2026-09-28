@@ -332,7 +332,7 @@ init();
 <script>
 // アプリとしてホーム画面から起動できるようにする（https または localhost でのみ有効）
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=6").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=7").catch(() => {}));
 }
 </script>
 </body>

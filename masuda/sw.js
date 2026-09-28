@@ -1,6 +1,6 @@
 // 工事日報アプリ サービスワーカー（クラウド版）
 // このフォルダの画面だけを保存する。データはGoogleスプレッドシート側なので触らない。
-const CACHE = "nippou-masuda-v7";
+const CACHE = "nippou-masuda-v8";
 const SHELL = [
   "./", "./index.html", "./admin.html", "./print.html", "./install.html",
   "./config.js", "./manifest.webmanifest",
