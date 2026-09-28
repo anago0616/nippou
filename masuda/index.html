@@ -89,7 +89,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v17</span>
+    <span style="font-size:11px; opacity:.8;">v18</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -597,6 +597,8 @@ function clearForm() {
   $("f_reporter").value = $("myName").value;
   syncSingle("chipsEditReporter", "f_reporter");
   TEXT_FIELDS.forEach(id => { $(id).value = ""; });
+  $("f_shussha").value = "08:00";      // 出社の初期値
+  $("f_kisha").value = "17:00";        // 帰社の初期値
   ["wJisha", "wDaikuen", "vJisha", "vDaikuen"].forEach(k => setChips(k, []));
   $("sekouRows").innerHTML = "";
   addSekouRow();
@@ -676,6 +678,8 @@ async function copyLast() {
   $("f_date").value = $("listDate").value || todayStr();
   ["f_shussha", "f_kisha", "f_claim_joukyou", "f_claim_taiou", "f_kikai1", "f_kikai2",
     "f_kikai_joukyou", "f_kikai_taiou", "f_bikou"].forEach(id => { $(id).value = ""; });
+  $("f_shussha").value = "08:00";
+  $("f_kisha").value = "17:00";
   $("sekouRows").innerHTML = "";
   addSekouRow();
   $("deleteCard").classList.add("hidden");
@@ -819,7 +823,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=4");
+      await navigator.serviceWorker.register("sw.js?v=5");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {
