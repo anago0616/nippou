@@ -43,6 +43,26 @@
   h2 { font-size: 15px; margin: 0 0 10px; color: var(--blue); }
   .muted { color: #888; font-size: 13px; }
   .nowrap { white-space: nowrap; }
+  .hidden { display: none !important; }
+
+  /* ===== 日報の詳細表示 ===== */
+  #detailPanel { position: fixed; z-index: 300; width: 340px; max-height: 80vh; overflow-y: auto;
+                 background: #fff; border: 1px solid var(--line); border-radius: 10px;
+                 padding: 14px 16px; box-shadow: 0 6px 24px rgba(0,0,0,.18); pointer-events: none; }
+  #detailModal { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300;
+                 display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #detailModal .d-modal-inner { background: #fff; border-radius: 12px; padding: 18px; width: 100%;
+                                max-width: 460px; max-height: 86vh; overflow-y: auto; }
+  .d-title { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+  .d-sec { font-size: 12px; color: #fff; background: var(--blue); border-radius: 4px;
+           padding: 2px 8px; display: inline-block; margin: 10px 0 6px; }
+  .d-row { display: flex; gap: 8px; font-size: 13px; line-height: 1.7; }
+  .d-key { color: #888; min-width: 84px; flex-shrink: 0; }
+  .d-val { flex: 1; word-break: break-word; }
+  .d-free { font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+  .d-foot { margin-top: 12px; font-size: 11px; color: #aaa; }
+  tr.row-detail { -webkit-touch-callout: none; }
+  @media (hover: hover) { tr.row-detail:hover td { background: #eef5ff; cursor: help; } }
 
   /* ===== スマホ表示 =====
      PC用の表のままだと横にはみ出して工事名が縦1文字ずつになるため、
@@ -78,7 +98,7 @@
 <header>
   <h1>工事日報 管理画面</h1>
   <div style="display:flex; align-items:center; gap:10px;">
-    <span style="font-size:11px; opacity:.8;">v21</span>
+    <span style="font-size:11px; opacity:.8;">v22</span>
     <a href="index.html">入力画面へ</a>
   </div>
 </header>
@@ -125,6 +145,8 @@
     </table>
   </div>
 </main>
+
+<div id="detailPanel" class="hidden"></div>
 
 <script>
 let masters = null;
@@ -206,13 +228,17 @@ function query() {
   return p;
 }
 
+let REPORTS = {};   // 表示中の日報を全項目で保持（詳細表示用）
+
 async function load() {
-  const list = await apiGet(query());
+  const list = await apiGet(Object.assign({ full: "1" }, query()));
+  REPORTS = {};
+  list.forEach(r => { REPORTS[r.id] = r; });
   $("countLabel").textContent = `（${list.length}件）`;
   $("tbody").innerHTML = list.length === 0
     ? '<tr><td colspan="7" class="muted t-empty">日報がありません</td></tr>'
     : list.map(r => `
-      <tr>
+      <tr data-id="${esc(r.id)}" class="row-detail">
         <td class="nowrap" data-label="日付">${esc(r.date)}</td>
         <td class="nowrap" data-label="報告者">${esc(r.reporter)}</td>
         <td class="t-title">${esc(r.kouji_mei) || "（工事名なし）"}</td>
@@ -226,12 +252,130 @@ async function load() {
         </td>
       </tr>`).join("");
 
+  wireDetail();
+
   // 提出状況（日付表示のときのみ）
   if ($("mode").value === "date") {
     const submitted = new Set(list.map(r => r.reporter));
     $("missingBox").innerHTML = masters.reporters.map(w =>
       `<span class="${submitted.has(w) ? "ok" : ""}">${esc(w)}</span>`).join("");
   }
+}
+
+// ===== 日報の詳細表示（PCはカーソルを重ねる／スマホは長押し） =====
+function line(label, value) {
+  if (value === undefined || value === null || value === "") return "";
+  return '<div class="d-row"><span class="d-key">' + label + '</span>' +
+         '<span class="d-val">' + esc(value) + '</span></div>';
+}
+
+function joinList(a) { return (Array.isArray(a) ? a : []).filter(Boolean).join("、"); }
+
+function detailHtml(r) {
+  const j = r.jinin || {};
+  const jisha = joinList(r.sagyouin_jisha);
+  const gai = joinList(r.sagyouin_daikuen);
+  const vj = joinList(r.sharyo_jisha);
+  const vg = joinList(r.sharyo_daikuen);
+  const lease = [r.lease_name, r.lease_name2].filter(Boolean).join("、");
+  const partner = (masters && masters.partner) || "外注";
+  const num = v => (v === "" || v === null || v === undefined || Number(v) === 0) ? "" : v + "人";
+
+  let sekou = "";
+  const rows = (r.sekou || []).filter(x => x.koushu || x.kankei || x.enchou || x.kasho);
+  if (rows.length) {
+    sekou = '<div class="d-sec">工事施工数量</div>' + rows.map(x =>
+      '<div class="d-row"><span class="d-key">' + esc(x.koushu || "-") + '</span>' +
+      '<span class="d-val">' +
+      esc([x.kankei, x.enchou, x.kasho ? x.kasho + "箇所" : ""].filter(Boolean).join("　")) +
+      '</span></div>').join("");
+  }
+
+  return '<div class="d-title">' + (esc(r.kouji_mei) || "（工事名なし）") + '</div>' +
+    '<div class="d-sec">基本</div>' +
+    line("日付", r.date) +
+    line("報告者", r.reporter) +
+    line("状態", r.status === "submitted" ? "提出済" : "下書き") +
+    line("天気", r.weather) +
+    line("出社・帰社", [r.shussha, r.kisha].filter(Boolean).join(" 〜 ")) +
+    line("作業時間", [r.jikan_from, r.jikan_to].filter(Boolean).join(" 〜 ")) +
+    '<div class="d-sec">工事</div>' +
+    line("発注者", r.hacchusha) +
+    line("工事場所", r.kouji_basho) +
+    line("工種", r.koushu) +
+    '<div class="d-sec">人員</div>' +
+    line("自社", jisha ? jisha + "（" + (r.sagyouin_jisha || []).length + "人）" : "") +
+    line(partner, gai ? gai + "（" + (r.sagyouin_daikuen || []).length + "人）" : "") +
+    line("その他", [j.sonota_kaisha, num(j.sonota)].filter(Boolean).join("　")) +
+    line("その他作業員", r.sagyouin_gaichu) +
+    line("交通誘導員", [j.yudo_kaisha,
+                       j.yudo_a ? "A" + j.yudo_a + "人" : "",
+                       j.yudo_b ? "B" + j.yudo_b + "人" : ""].filter(Boolean).join("　")) +
+    '<div class="d-sec">車両</div>' +
+    line("自社", vj) +
+    line(partner, vg) +
+    line("リース", [r.lease_moto, lease].filter(Boolean).join("　")) +
+    sekou +
+    (r.bikou ? '<div class="d-sec">備考</div><div class="d-free">' + esc(r.bikou) + '</div>' : "") +
+    '<div class="d-foot">更新 ' + esc(r.updated_at || "") + '</div>';
+}
+
+function showDetailPanel(r, x, y) {
+  const el = $("detailPanel");
+  el.innerHTML = detailHtml(r);
+  el.classList.remove("hidden");
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let left = x + 18, top = y + 12;
+  if (left + w > window.innerWidth - 10) left = x - w - 18;
+  if (left < 10) left = 10;
+  if (top + h > window.innerHeight - 10) top = Math.max(10, window.innerHeight - h - 10);
+  el.style.left = left + "px";
+  el.style.top = top + "px";
+}
+
+function hideDetailPanel() { $("detailPanel").classList.add("hidden"); }
+
+function showDetailModal(r) {
+  if (document.getElementById("detailModal")) return;
+  const m = document.createElement("div");
+  m.id = "detailModal";
+  m.innerHTML = '<div class="d-modal-inner">' + detailHtml(r) +
+    '<button class="btn btn-primary" id="dmClose" style="width:100%;margin-top:14px;">閉じる</button></div>';
+  document.body.appendChild(m);
+  const close = () => m.remove();
+  document.getElementById("dmClose").onclick = close;
+  m.addEventListener("click", e => { if (e.target === m) close(); });
+}
+
+function wireDetail() {
+  const hoverOk = window.matchMedia("(hover: hover)").matches;
+  document.querySelectorAll("#tbody tr.row-detail").forEach(tr => {
+    const r = REPORTS[tr.dataset.id];
+    if (!r) return;
+
+    if (hoverOk) {
+      tr.addEventListener("mousemove", e => {
+        if (e.target.closest("button")) { hideDetailPanel(); return; }
+        showDetailPanel(r, e.clientX, e.clientY);
+      });
+      tr.addEventListener("mouseleave", hideDetailPanel);
+    }
+
+    // スマホ：0.5秒の長押しで詳細を表示
+    let timer = null;
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    tr.addEventListener("touchstart", e => {
+      if (e.target.closest("button")) return;
+      cancel();
+      timer = setTimeout(() => { timer = null; showDetailModal(r); }, 500);
+    }, { passive: true });
+    tr.addEventListener("touchmove", cancel, { passive: true });
+    tr.addEventListener("touchend", cancel);
+    tr.addEventListener("touchcancel", cancel);
+    tr.addEventListener("contextmenu", e => {
+      if (!e.target.closest("button")) e.preventDefault();
+    });
+  });
 }
 
 async function del(id) {
@@ -263,7 +407,7 @@ init();
 <script>
 // アプリとしてホーム画面から起動できるようにする（https または localhost でのみ有効）
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=8").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=9").catch(() => {}));
 }
 </script>
 </body>
