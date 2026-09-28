@@ -89,7 +89,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v15</span>
+    <span style="font-size:11px; opacity:.8;">v16</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -820,7 +820,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=2");
+      await navigator.serviceWorker.register("sw.js?v=3");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {
