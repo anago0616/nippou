@@ -86,6 +86,15 @@
   #saveGate .gate-inner { background: #fff; border-radius: 12px; padding: 24px; max-width: 420px; width: 100%; }
   #saveGate h2 { font-size: 18px; margin: 0 0 8px; color: var(--blue); }
   #saveGate .btn { width: 100%; margin-top: 10px; }
+
+  /* 入力候補 */
+  .sug-box { position: absolute; left: 0; right: 0; top: 100%; z-index: 50;
+             background: #fff; border: 1px solid var(--line); border-radius: 8px;
+             box-shadow: 0 4px 14px rgba(0,0,0,.14); overflow: hidden; margin-top: 2px; }
+  .sug-head { font-size: 11px; color: #999; padding: 6px 10px 4px; }
+  .sug-item { padding: 11px 12px; font-size: 15px; border-top: 1px solid #f0f0f0;
+              cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sug-item:active, .sug-item:hover { background: #eef5ff; }
 </style>
 </head>
 <body>
@@ -93,7 +102,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v22</span>
+    <span style="font-size:11px; opacity:.8;">v23</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -500,6 +509,10 @@ async function init() {
   window.addEventListener("online", () => trySync());   // 電波が戻ったら送る
   setInterval(() => { if (navigator.onLine) trySync(); }, 60000);
 
+  loadSuggestCache();
+  wireSuggest();
+  refreshSuggestions();          // 裏で最新の候補を集める
+
   loadList();
   if (params.get("new") === "1" && $("myName").value) newReport();
 }
@@ -546,6 +559,8 @@ function addSekouRow(data) {
       <div class="field"><label>箇所</label><input type="text" class="s_kasho" inputmode="numeric" value="${esc(data.kasho)}"></div>
     </div>`;
   $("sekouRows").appendChild(div);
+  attachSuggest(div.querySelector(".s_koushu"), "sekou_koushu");
+  attachSuggest(div.querySelector(".s_kankei"), "sekou_kankei");
 }
 
 function collectSekou() {
@@ -558,6 +573,117 @@ function collectSekou() {
 }
 
 // ---------- 画面切り替え ----------
+// ===== 入力候補（過去に入力した値を覚えて、下に出す） =====
+// プルダウン(select/datalist)は端末によって表示が崩れるため、自前の一覧を出す
+const SUGGEST_FIELDS = {
+  f_kouji_mei: "kouji_mei",
+  f_hacchusha: "hacchusha",
+  f_kouji_basho: "kouji_basho",
+  f_koushu: "koushu",
+  f_sonota_kaisha: "sonota_kaisha",
+  f_sagyouin_gaichu: "sagyouin_gaichu",
+  f_yudo_kaisha: "yudo_kaisha",
+  f_lease_moto: "lease_moto",
+  f_lease_name: "lease_name",
+  f_lease_name2: "lease_name",
+};
+
+let SUGGEST = {};
+
+function loadSuggestCache() {
+  try { SUGGEST = JSON.parse(localStorage.getItem("suggest") || "{}") || {}; }
+  catch (e) { SUGGEST = {}; }
+}
+
+function saveSuggestCache() {
+  try { localStorage.setItem("suggest", JSON.stringify(SUGGEST)); } catch (e) {}
+}
+
+function addSuggest(key, value) {
+  if (!value) return;
+  const v = String(value).trim();
+  if (!v) return;
+  const a = SUGGEST[key] || (SUGGEST[key] = []);
+  const i = a.indexOf(v);
+  if (i >= 0) a.splice(i, 1);
+  a.unshift(v);                 // 新しく使ったものを先頭に
+  if (a.length > 30) a.length = 30;
+}
+
+function indexReport(r) {
+  if (!r) return;
+  addSuggest("kouji_mei", r.kouji_mei);
+  addSuggest("hacchusha", r.hacchusha);
+  addSuggest("kouji_basho", r.kouji_basho);
+  addSuggest("koushu", r.koushu);
+  addSuggest("sagyouin_gaichu", r.sagyouin_gaichu);
+  addSuggest("lease_moto", r.lease_moto);
+  addSuggest("lease_name", r.lease_name);
+  addSuggest("lease_name", r.lease_name2);
+  const j = r.jinin || {};
+  addSuggest("sonota_kaisha", j.sonota_kaisha);
+  addSuggest("yudo_kaisha", j.yudo_kaisha);
+  (r.sekou || []).forEach(x => {
+    addSuggest("sekou_koushu", x.koushu);
+    addSuggest("sekou_kankei", x.kankei);
+  });
+}
+
+// 全員分の過去の日報から候補を集める（裏で実行。圏外なら前回の候補を使う）
+async function refreshSuggestions() {
+  try {
+    const today = new Date();
+    const past = new Date(today.getTime() - 180 * 86400000);
+    const fmt = x => x.toLocaleDateString("sv-SE");
+    const list = await apiGet({ action: "list", full: "1", from: fmt(past), to: fmt(today) });
+    list.slice().reverse().forEach(indexReport);   // 古い順に入れて、新しいものを先頭へ
+    saveSuggestCache();
+  } catch (e) { /* つながらないときは何もしない */ }
+}
+
+function hideSuggest(el) {
+  const wrap = el.closest(".field") || el.parentElement;
+  const b = wrap.querySelector(".sug-box");
+  if (b) b.remove();
+}
+
+function showSuggest(el, key) {
+  hideSuggest(el);
+  const all = SUGGEST[key] || [];
+  const q = el.value.trim();
+  const hits = all.filter(v => v !== q && (!q || v.indexOf(q) >= 0)).slice(0, 8);
+  if (!hits.length) return;
+
+  const wrap = el.closest(".field") || el.parentElement;
+  wrap.style.position = "relative";
+  const box = document.createElement("div");
+  box.className = "sug-box";
+  box.innerHTML = '<div class="sug-head">これまでに入力した内容</div>' +
+    hits.map(v => '<div class="sug-item">' + esc(v) + '</div>').join("");
+  wrap.appendChild(box);
+
+  [...box.querySelectorAll(".sug-item")].forEach((c, i) => {
+    const pick = e => { e.preventDefault(); el.value = hits[i]; hideSuggest(el); };
+    c.addEventListener("mousedown", pick);
+    c.addEventListener("touchstart", pick, { passive: false });
+  });
+}
+
+function attachSuggest(el, key) {
+  if (!el || el.dataset.sug === "1") return;
+  el.dataset.sug = "1";
+  el.setAttribute("autocomplete", "off");
+  el.addEventListener("focus", () => showSuggest(el, key));
+  el.addEventListener("input", () => showSuggest(el, key));
+  el.addEventListener("blur", () => setTimeout(() => hideSuggest(el), 180));
+}
+
+function wireSuggest() {
+  for (const id in SUGGEST_FIELDS) attachSuggest($(id), SUGGEST_FIELDS[id]);
+  document.querySelectorAll(".s_koushu").forEach(el => attachSuggest(el, "sekou_koushu"));
+  document.querySelectorAll(".s_kankei").forEach(el => attachSuggest(el, "sekou_kankei"));
+}
+
 function snapshotForm() {
   try { formSnapshot = JSON.stringify(collectForm("-")); } catch (e) { formSnapshot = null; }
 }
@@ -778,6 +904,8 @@ async function saveReport(status) {
 
   currentStatus = status;
   snapshotForm();
+  indexReport(report);
+  saveSuggestCache();   // 入力した値を次回の候補にする
   toast(status === "submitted" ? "提出しました" : "下書き保存しました");
   const r = await trySync();             // つながっていればそのまま送信
   if (r && r.failed) toast("端末に保存しました（電波が戻ったら自動送信します）");
@@ -851,7 +979,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=9");
+      await navigator.serviceWorker.register("sw.js?v=10");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {
