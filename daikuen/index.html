@@ -87,6 +87,19 @@
   #saveGate h2 { font-size: 18px; margin: 0 0 8px; color: var(--blue); }
   #saveGate .btn { width: 100%; margin-top: 10px; }
 
+  /* 仕事のテンプレート */
+  .tpl-item { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .tpl-item:last-child { margin-bottom: 0; }
+  .tpl-item .tpl-use { flex: 1; min-width: 0; text-align: left; white-space: nowrap;
+                       overflow: hidden; text-overflow: ellipsis; }
+  #tplGate { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 210;
+             display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #tplGate .gate-inner { background: #fff; border-radius: 12px; padding: 24px; max-width: 420px; width: 100%; }
+  #tplGate h2 { font-size: 18px; margin: 0 0 8px; color: var(--blue); }
+  #tplGate input { display: block; width: 100%; min-height: 46px; padding: 11px 10px; font-size: 16px;
+                   border: 1px solid var(--line); border-radius: 8px; margin: 14px 0 4px; }
+  #tplGate .btn { width: 100%; margin-top: 10px; }
+
   /* 入力候補 */
   .sug-box { position: absolute; left: 0; right: 0; top: 100%; z-index: 50;
              background: #fff; border: 1px solid var(--line); border-radius: 8px;
@@ -102,7 +115,7 @@
   <h1 id="headerTitle">工事日報</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     <span id="syncBadge" class="hidden" onclick="trySync(true)"></span>
-    <span style="font-size:11px; opacity:.8;">v23</span>
+    <span style="font-size:11px; opacity:.8;">v24</span>
     <a href="admin.html">管理画面</a>
   </div>
 </header>
@@ -125,8 +138,12 @@
       <h2>この日の日報</h2>
       <div id="reportList"><p class="muted center">読み込み中...</p></div>
     </div>
+    <div class="card">
+      <h2>仕事のテンプレート</h2>
+      <div id="tplList"><p class="muted">読み込み中...</p></div>
+    </div>
     <div class="listActions">
-      <button class="btn btn-primary" onclick="newReport()">＋ 新しい日報を書く</button>
+      <button class="btn btn-primary" onclick="newReport()">＋ 新しい日報を書く（白紙）</button>
       <button class="btn btn-outline" onclick="copyLast()">前回をコピー</button>
     </div>
     <p class="muted center" id="offlineState" style="margin-top:14px;">オフライン対応：確認中…</p>
@@ -222,6 +239,11 @@
     <div class="card">
       <h2>備考</h2>
       <div class="field"><textarea id="f_bikou" rows="3"></textarea></div>
+    </div>
+
+    <div class="card" style="text-align:center;">
+      <button class="btn btn-outline btn-small" onclick="askTemplateName()">この内容をテンプレートに保存</button>
+      <p class="muted" style="margin:8px 0 0;">同じ仕事をまた書くとき、1タップで呼び出せます。</p>
     </div>
 
     <div class="card" id="deleteCard" style="text-align:center;">
@@ -512,6 +534,10 @@ async function init() {
   loadSuggestCache();
   wireSuggest();
   refreshSuggestions();          // 裏で最新の候補を集める
+
+  loadTplCache();
+  renderTemplates();             // まず前回のテンプレートを出す（圏外でも出る）
+  refreshTemplates();            // 裏で最新に入れ替える
 
   loadList();
   if (params.get("new") === "1" && $("myName").value) newReport();
@@ -843,6 +869,186 @@ async function copyLast() {
   toast("前回の内容をコピーしました");
 }
 
+// ==================================================================
+// 仕事ごとのテンプレート
+// 「前回をコピー」は直前の1件だけだが、こちらは仕事の型を何個でも残せる。
+// 保存先はスプレッドシートなので、1人が作れば全員のスマホに出てくる。
+// ==================================================================
+let TEMPLATES = [];
+
+function loadTplCache() {
+  try { TEMPLATES = JSON.parse(localStorage.getItem("templates") || "[]") || []; }
+  catch (e) { TEMPLATES = []; }
+}
+
+function saveTplCache() {
+  try { localStorage.setItem("templates", JSON.stringify(TEMPLATES)); } catch (e) {}
+}
+
+// サーバーにまだ送れていないテンプレート（この端末だけにある分）
+function localTpls() {
+  try { return JSON.parse(localStorage.getItem("templates_local") || "[]") || []; }
+  catch (e) { return []; }
+}
+
+function setLocalTpls(a) {
+  try { localStorage.setItem("templates_local", JSON.stringify(a)); } catch (e) {}
+}
+
+/** 端末だけに残っている分を、つながったタイミングでサーバーへ移す */
+async function pushLocalTemplates(server) {
+  const locals = localTpls();
+  if (!locals.length) return server;
+  const rest = [];
+  for (const t of locals) {
+    try { await apiPost({ action: "saveTemplate", name: t.name, data: t.data }); }
+    catch (e) { rest.push(t); }
+  }
+  setLocalTpls(rest);
+  if (rest.length === locals.length) return server;
+  try {
+    const again = await apiGet({ action: "templates" });
+    if (Array.isArray(again)) return again;
+  } catch (e) {}
+  return server;
+}
+
+async function refreshTemplates() {
+  try {
+    let server = await apiGet({ action: "templates" });
+    if (Array.isArray(server)) {
+      server = await pushLocalTemplates(server);
+      TEMPLATES = server.concat(localTpls());
+      saveTplCache();
+    }
+  } catch (e) { /* 圏外のときは前回のものを使う */ }
+  renderTemplates();
+}
+
+function renderTemplates() {
+  const box = $("tplList");
+  if (!box) return;
+  if (!TEMPLATES.length) {
+    box.innerHTML = '<p class="muted">まだありません。日報を書いた画面の下にある' +
+      '「この内容をテンプレートに保存」を押すと、ここに並びます。</p>';
+    return;
+  }
+  box.innerHTML = TEMPLATES.map((t, i) =>
+    '<div class="tpl-item">' +
+      '<button class="btn btn-outline tpl-use" onclick="useTemplate(' + i + ')">' +
+        esc(t.name) + (t.local ? ' <span class="muted">(この端末のみ)</span>' : '') + '</button>' +
+      '<button class="btn btn-danger btn-small" onclick="removeTemplate(' + i + ')">×</button>' +
+    '</div>').join("") +
+    '<p class="muted" style="margin:10px 0 0;">押すと、その型で新しい日報を書きはじめます。</p>';
+}
+
+/** テンプレートから新しい日報を書きはじめる */
+function useTemplate(i) {
+  const t = TEMPLATES[i];
+  if (!t) return;
+  if (!$("myName").value) { toast("先に報告者を選択してください"); return; }
+  editingId = null;
+  const d = Object.assign({}, t.data || {});
+  d.date = $("listDate").value || todayStr();
+  d.reporter = $("myName").value;
+  d.status = "draft";
+  delete d.weather;                       // 天気はその日ごとに選ぶ
+  delete d.bikou;
+  fillForm(d);
+  if (!$("f_shussha").value) $("f_shussha").value = "08:00";
+  if (!$("f_kisha").value) $("f_kisha").value = "17:00";
+  if (!$("f_jikan_from").value) $("f_jikan_from").value = "09:00";
+  if (!$("f_jikan_to").value) $("f_jikan_to").value = "17:00";
+  if (!$("sekouRows").children.length) addSekouRow();
+  $("deleteCard").classList.add("hidden");
+  currentStatus = "draft";
+  showEdit();
+  toast("「" + t.name + "」を読み込みました");
+}
+
+/** テンプレートに残す中身（日付・天気・備考・数量は残さない） */
+function templateData() {
+  const d = collectForm("draft");
+  ["date", "reporter", "status", "weather", "bikou"].forEach(k => { delete d[k]; });
+  d.sekou = (d.sekou || [])
+    .filter(x => x.koushu || x.kankei)
+    .map(x => ({ koushu: x.koushu, kankei: x.kankei, enchou: "", kasho: "" }));
+  return d;
+}
+
+function askTemplateName() {
+  if (document.getElementById("tplGate")) return;
+  const g = document.createElement("div");
+  g.id = "tplGate";
+  g.innerHTML =
+    '<div class="gate-inner">' +
+      '<h2>テンプレートに保存</h2>' +
+      '<p class="muted">工事名・発注者・場所・工種・人員・車両・施工数量の工種を、仕事の型として残します。' +
+      '日付・天気・備考・延長や箇所数は残しません。</p>' +
+      '<input type="text" id="tplName" placeholder="例：西宮市 本管カメラ調査" value="' +
+        esc($("f_kouji_mei").value.trim()) + '">' +
+      '<p class="muted" id="tplMsg" style="min-height:20px;">同じ名前があるときは上書きします。</p>' +
+      '<button class="btn btn-primary" id="tplOk">保存する</button>' +
+      '<button class="btn" id="tplCancel" style="background:#eee;">やめる</button>' +
+    '</div>';
+  document.body.appendChild(g);
+  const close = () => g.remove();
+  document.getElementById("tplCancel").onclick = close;
+  document.getElementById("tplOk").onclick = async () => {
+    const name = document.getElementById("tplName").value.trim();
+    if (!name) {
+      const m = document.getElementById("tplMsg");
+      m.textContent = "名前を入れてください";
+      m.style.color = "#c62828";
+      return;
+    }
+    close();
+    await saveTemplateNow(name);
+  };
+  document.getElementById("tplName").addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("tplOk").click();
+  });
+}
+
+async function saveTemplateNow(name) {
+  const data = templateData();
+  try {
+    await apiPost({ action: "saveTemplate", name: name, data: data });
+    await refreshTemplates();
+    toast("テンプレート「" + name + "」を保存しました");
+    return;
+  } catch (e) { /* 圏外・サーバー側が古い → 端末内に保存しておく */ }
+
+  const locals = localTpls().filter(t => t.name !== name);
+  locals.push({ id: "L" + Date.now(), name: name, data: data, local: true });
+  setLocalTpls(locals);
+  TEMPLATES = TEMPLATES.filter(t => !(t.local && t.name === name)).concat([locals[locals.length - 1]]);
+  saveTplCache();
+  renderTemplates();
+  toast("テンプレート「" + name + "」を保存しました（この端末に保存）");
+}
+
+async function removeTemplate(i) {
+  const t = TEMPLATES[i];
+  if (!t) return;
+  if (!confirm("テンプレート「" + t.name + "」を削除しますか？\n（提出済みの日報は消えません）")) return;
+  if (t.local) {
+    setLocalTpls(localTpls().filter(x => x.id !== t.id));
+    TEMPLATES = TEMPLATES.filter(x => x.id !== t.id);
+    saveTplCache();
+    renderTemplates();
+    toast("削除しました");
+    return;
+  }
+  try {
+    await apiPost({ action: "deleteTemplate", id: t.id });
+    await refreshTemplates();
+    toast("削除しました");
+  } catch (e) {
+    toast("削除できませんでした。電波のある場所でもう一度お試しください");
+  }
+}
+
 function collectForm(status) {
   const num = v => v === "" ? "" : Number(v);
   return {
@@ -979,7 +1185,7 @@ init();
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=10");
+      await navigator.serviceWorker.register("sw.js?v=11");
       await navigator.serviceWorker.ready;
       // 実際にアプリ画面が保存されたかまで確認する
       for (let i = 0; i < 12; i++) {
